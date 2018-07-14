@@ -32,15 +32,20 @@ fn get_broker() -> Result<SocketAddr> {
         // execute task
         let mut runtime = Runtime::new().unwrap();
         let result = runtime.block_on(request_broker_ip);
-        let (socket, data, len, remote_addr) = result.unwrap();
-        return Ok(remote_addr);
+        match result {
+            Ok((socket, data, len, remote_addr)) => return Ok(remote_addr),
+            Err(e) => {}
+        }
     }
     Err(Error::new(ErrorKind::NotFound, "Unable to find broker"))
 }
 
 fn main() {
     let broker = get_broker();
-    println!("found broker: {}", broker.unwrap());
+    match broker {
+        Ok(broker) => println!("found broker: {}", broker),
+        Err(e) => println!("{}", e),
+    }
 
     // let mut args = env::args().skip(1).collect::<Vec<_>>();
     // let tcp = match args.iter().position(|a| a == "--udp") {
