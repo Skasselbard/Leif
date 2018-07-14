@@ -1,0 +1,13 @@
+[package]
+name = "leif-server"
+version = "0.1.0"
+authors = ["Tom <tom.meyer89@gmail.com>"]
+
+[dependencies]
+leif-common = {path = "../common"}
+tokio = "0.1.7"
+tokio-io = "0.1"
+futures = "0.1"
+bytes = "0.4"
+tokio-codec = "0.1.0"
+get_if_addrs = "0.5.3"

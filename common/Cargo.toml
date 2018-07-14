@@ -1,0 +1,7 @@
+[package]
+name = "leif-common"
+version = "0.1.0"
+authors = ["Tom <tom.meyer89@gmail.com>"]
+
+[dependencies]
+get_if_addrs = "0.5.3"
