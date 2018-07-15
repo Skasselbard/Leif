@@ -16,6 +16,7 @@ pub fn get_ip_addresses() -> Result<Vec<IpAddr>> {
 
 pub fn get_broadcasts() -> Result<Vec<IpAddr>> {
     let mut ret: Vec<IpAddr> = Vec::new();
+    ret.push("ff01::1".parse().unwrap());
     for iface in get_if_addrs::get_if_addrs()? {
         match iface.addr {
             IfAddr::V4(v4_iface) => match v4_iface.broadcast {

@@ -21,6 +21,7 @@ fn get_broker() -> Result<SocketAddr> {
         // setup socket
         let remote_addr = SocketAddr::new(broadcast, 8207);
         println!("Broadcast to {}", remote_addr);
+        //let socket = UdpSocket::bind(&"0.0.0.0:0".parse().unwrap()).unwrap();
         let socket = UdpSocket::bind(&"[::]:0".parse().unwrap()).unwrap();
         socket.set_broadcast(true).unwrap();
         //define task
