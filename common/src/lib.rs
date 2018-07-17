@@ -1,4 +1,21 @@
+#[macro_use]
+extern crate serde_derive;
+extern crate bincode;
+extern crate bytes;
+extern crate conv;
 extern crate get_if_addrs;
+extern crate ron;
+extern crate serde;
+extern crate serde_json;
+
+mod message;
+mod serialization;
+
+pub use message::Body;
+pub use message::Header;
+pub use message::Message;
+pub use message::Version as MessageVersion;
+pub use serialization::Serializer;
 
 use get_if_addrs::IfAddr;
 use std::io::Result;

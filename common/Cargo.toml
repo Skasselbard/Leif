@@ -5,3 +5,10 @@ authors = ["Tom <tom.meyer89@gmail.com>"]
 
 [dependencies]
 get_if_addrs = "0.5.3"
+serde = "1.0.70"
+serde_json = "1.0.22"
+serde_derive = "1.0.70"
+bincode = "1.0.1"
+ron = "0.3.0"
+conv = "0.3.3"
+bytes = "0.4.8"
