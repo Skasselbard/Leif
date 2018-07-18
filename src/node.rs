@@ -1,18 +1,16 @@
-extern crate bytes;
-extern crate futures;
-extern crate leif_common;
-extern crate tokio;
-extern crate tokio_codec;
-extern crate tokio_io;
-
+use bytes;
+use futures;
 use futures::sync::mpsc;
-use leif_common::get_broadcasts;
+use get_broadcasts;
 use std::io::{self, Error, ErrorKind, Read, Result, Write};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr, SocketAddrV4};
 use std::time::{Duration, Instant};
+use tokio;
 use tokio::net::UdpSocket;
 use tokio::prelude::*;
 use tokio::runtime::Runtime;
+use tokio_codec;
+use tokio_io;
 
 fn get_broker() -> Result<SocketAddr> {
     const MAX_DATAGRAM_SIZE: usize = 65_507;
@@ -118,7 +116,7 @@ mod tcp {
     use tokio_codec::Decoder;
 
     use bytes::BytesMut;
-    use codec::Bytes;
+    use node::codec::Bytes;
 
     use std::io;
     use std::net::SocketAddr;
@@ -153,7 +151,7 @@ mod udp {
     use tokio::net::{UdpFramed, UdpSocket};
     use tokio::prelude::*;
 
-    use codec::Bytes;
+    use node::codec::Bytes;
 
     pub fn connect(
         &addr: &SocketAddr,
