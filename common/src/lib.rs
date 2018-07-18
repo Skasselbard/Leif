@@ -1,12 +1,20 @@
 #[macro_use]
+extern crate log;
+#[macro_use]
 extern crate serde_derive;
+#[macro_use]
+extern crate serde_json;
+#[macro_use]
+extern crate futures;
 extern crate bincode;
 extern crate bytes;
 extern crate conv;
 extern crate get_if_addrs;
+extern crate leif_common;
 extern crate ron;
 extern crate serde;
-extern crate serde_json;
+extern crate tokio;
+extern crate tokio_codec;
 
 mod message;
 mod serialization;

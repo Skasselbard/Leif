@@ -1,36 +1,23 @@
+#[macro_use]
+extern crate serde_json;
 extern crate leif_common;
+extern crate log;
+extern crate simple_logger;
 
 use leif_common::*;
 
 #[test]
 fn serialize_deserialize_header_json() {
+    simple_logger::init_with_level(log::Level::Trace).unwrap();
     let original = Message {
         header: Header {
             version: MessageVersion::V1,
             body_serializer: Serializer::Json,
+            channels: json!(null),
         },
-        body: Body {},
+        body: Body::new(),
     };
-    let serialized = original.serialize(Serializer::Json);
-    assert!(match &serialized {
-        Ok(_) => true,
-        Err(ref e) => {
-            println!("Serialization failed: {}", e);
-            false
-        }
-    });
-    let serialized = serialized.unwrap();
-    println!(
-        "serialized: {}",
-        String::from_utf8_lossy(serialized.clone().as_slice())
-    );
-    let result = Message::deserialize_header(serialized);
-    assert!(match result {
-        Ok(_) => true,
-        Err(e) => {
-            println!("Deserialization failed: {}", e);
-            false
-        }
-    });
-    //assert_eq!(original.header, result.unwrap());
+    let serialized = original.serialize(Serializer::Json).unwrap();
+    let (header, _) = Message::deserialize_header(serialized).unwrap();
+    assert_eq!(original.header, header);
 }

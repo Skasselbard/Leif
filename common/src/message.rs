@@ -14,10 +14,13 @@ pub enum Version {
 pub struct Header {
     pub version: Version,
     pub body_serializer: Serializer,
+    pub channels: serde_json::Value,
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
-pub struct Body {}
+pub struct Body {
+    pub data: serde_json::Value,
+}
 
 #[allow(dead_code)]
 #[derive(Debug, PartialEq)]
@@ -26,7 +29,6 @@ pub struct Message {
     pub body: Body,
 }
 
-//TODO:implemenrt fmt
 impl Message {
     #[allow(dead_code)]
     pub fn serialize(&self, header_serializer: Serializer) -> Result<Vec<u8>> {
@@ -64,31 +66,45 @@ impl Message {
     #[allow(dead_code)]
     pub fn deserialize_header(message: Vec<u8>) -> Result<(Header, Vec<u8>)> {
         let mut buffer = Bytes::from(message).into_buf();
+        trace!("Initial buffer: {:?}", buffer);
 
         // get the serializer which was used for the header
         let serializer_length = buffer.get_u16_be() as usize;
+        trace!("Serializer length: {:?}", serializer_length);
         let (serializer_buffer, mut buffer) = {
-            let mut buffer: Vec<u8> = buffer.collect();
-            let serializer_buffer = buffer.split_off(serializer_length);
+            let mut serializer_buffer: Vec<u8> = buffer.collect();
+            let buffer = serializer_buffer.split_off(serializer_length);
             (
                 Bytes::from(serializer_buffer).into_buf(),
                 Bytes::from(buffer).into_buf(),
             )
         };
+        trace!("Serializer buffer: {:?}", serializer_buffer);
+
         // The Serializer name has to be en/de-coded in json by convention
         let serializer: Serializer = deserialize(serializer_buffer.bytes(), &Serializer::Json)?;
+        trace!("Parsed serializer: {:?}", serializer);
 
         // Deserialize the header
         let header_length = buffer.get_u64_be() as usize;
+        trace!("Header length: {:?}", header_length);
         let (header_buffer, buffer) = {
-            let mut buffer: Vec<u8> = buffer.collect();
-            let header_buffer = buffer.split_off(header_length);
+            let mut header_buffer: Vec<u8> = buffer.collect();
+            let buffer = header_buffer.split_off(header_length);
             (
                 Bytes::from(header_buffer).into_buf(),
                 Bytes::from(buffer).into_buf(),
             )
         };
         let header: Header = deserialize(header_buffer.bytes(), &serializer)?;
+        trace!("Parsed header: {:?}", header);
+        trace!("Rest buffer: {:?}", buffer);
         Ok((header, buffer.collect::<Vec<u8>>()))
+    }
+}
+
+impl Body {
+    pub fn new() -> Self {
+        Body { data: json!(null) }
     }
 }
