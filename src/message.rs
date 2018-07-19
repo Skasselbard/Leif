@@ -1,8 +1,7 @@
 use bytes::{Buf, BufMut, Bytes, BytesMut, IntoBuf};
 use serde_json;
-use std::io::{Error, ErrorKind, Result};
-
 use serialization::{deserialize, serialize, Serializer};
+use std::io::{Error, ErrorKind, Result};
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
 pub enum Version {
@@ -22,7 +21,6 @@ pub struct Body {
     pub data: serde_json::Value,
 }
 
-#[allow(dead_code)]
 #[derive(Debug, PartialEq)]
 pub struct Message {
     pub header: Header,
@@ -30,8 +28,7 @@ pub struct Message {
 }
 
 impl Message {
-    #[allow(dead_code)]
-    pub fn serialize(&self, header_serializer: Serializer) -> Result<Vec<u8>> {
+    pub fn serialize(&self, header_serializer: Serializer) -> Result<Bytes> {
         use conv::*;
 
         // The Serializer name has to be en/de-coded in json by convention
@@ -60,34 +57,30 @@ impl Message {
         buf.put_u64_be(header_length);
         buf.put(header);
         buf.put(body);
-        Ok(buf.to_vec())
+        Ok(Bytes::from(buf))
     }
 
-    #[allow(dead_code)]
-    pub fn deserialize_header(message: Vec<u8>) -> Result<(Header, Vec<u8>)> {
-        let mut buffer = Bytes::from(message).into_buf();
+    pub fn deserialize_header(message: Bytes) -> Result<(Header, Bytes)> {
+        let mut buffer = message.into_buf();
         trace!("Initial buffer: {:?}", buffer);
 
         // get the serializer which was used for the header
         let serializer_length = buffer.get_u16_be() as usize;
         trace!("Serializer length: {:?}", serializer_length);
         let (serializer_buffer, mut buffer) = {
-            let mut serializer_buffer: Vec<u8> = buffer.collect();
+            let mut serializer_buffer: Bytes = buffer.collect();
             let buffer = serializer_buffer.split_off(serializer_length);
             (
                 Bytes::from(serializer_buffer).into_buf(),
                 Bytes::from(buffer).into_buf(),
             )
         };
-        trace!("Serializer buffer: {:?}", serializer_buffer);
 
         // The Serializer name has to be en/de-coded in json by convention
         let serializer: Serializer = deserialize(serializer_buffer.bytes(), &Serializer::Json)?;
-        trace!("Parsed serializer: {:?}", serializer);
 
         // Deserialize the header
         let header_length = buffer.get_u64_be() as usize;
-        trace!("Header length: {:?}", header_length);
         let (header_buffer, buffer) = {
             let mut header_buffer: Vec<u8> = buffer.collect();
             let buffer = header_buffer.split_off(header_length);
@@ -97,9 +90,7 @@ impl Message {
             )
         };
         let header: Header = deserialize(header_buffer.bytes(), &serializer)?;
-        trace!("Parsed header: {:?}", header);
-        trace!("Rest buffer: {:?}", buffer);
-        Ok((header, buffer.collect::<Vec<u8>>()))
+        Ok((header, buffer.collect::<Bytes>()))
     }
 }
 

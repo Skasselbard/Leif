@@ -1,32 +1,33 @@
+#![allow(dead_code)]
+
 #[macro_use]
 extern crate log;
 #[macro_use]
 extern crate serde_derive;
 #[macro_use]
 extern crate serde_json;
-#[macro_use]
+//#[macro_use]
 extern crate bincode;
 #[macro_use]
 extern crate futures;
 extern crate bytes;
 extern crate conv;
 extern crate get_if_addrs;
+extern crate mio;
 extern crate ron;
 extern crate serde;
 extern crate tokio;
 extern crate tokio_codec;
 extern crate tokio_io;
 
-mod broadcast_listener;
 mod broker;
 mod message;
+mod message_streams;
 mod node;
 mod serialization;
 
-pub use message::Body;
-pub use message::Header;
-pub use message::Message;
 pub use message::Version as MessageVersion;
+pub use message::{Body, Header, Message};
 pub use serialization::Serializer;
 
 use get_if_addrs::IfAddr;

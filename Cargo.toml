@@ -1,5 +1,5 @@
 [package]
-name = "leif-common"
+name = "leif"
 version = "0.1.0"
 authors = ["Tom <tom.meyer89@gmail.com>"]
 
@@ -19,3 +19,4 @@ tokio-io = "0.1"
 futures = "0.1"
 tokio-codec = "0.1.0"
 tokio-timer = "0.2.4"
+mio = "0.6.15"

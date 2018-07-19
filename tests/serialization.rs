@@ -1,10 +1,10 @@
 #[macro_use]
 extern crate serde_json;
-extern crate leif_common;
+extern crate leif;
 extern crate log;
 extern crate simple_logger;
 
-use leif_common::*;
+use leif::*;
 
 #[test]
 fn serialize_deserialize_header_json() {

@@ -1,16 +1,26 @@
-use bytes;
-use futures;
 use futures::sync::mpsc;
 use get_broadcasts;
-use std::io::{self, Error, ErrorKind, Read, Result, Write};
-use std::net::{IpAddr, Ipv4Addr, SocketAddr, SocketAddrV4};
+use std::io::{self, Error, ErrorKind, Read, Result};
+use std::net::SocketAddr;
 use std::time::{Duration, Instant};
-use tokio;
 use tokio::net::UdpSocket;
 use tokio::prelude::*;
 use tokio::runtime::Runtime;
-use tokio_codec;
-use tokio_io;
+
+struct Node {
+    //task: Future<Item = T>,
+}
+
+impl Node {
+    pub fn run(&self) {
+        let broker = get_broker();
+        if let Ok(broker) = broker {
+            println!("found broker: {}", broker);
+            //tokio::run(self.task);
+        }
+        error!("Cannot find broker");
+    }
+}
 
 fn get_broker() -> Result<SocketAddr> {
     const MAX_DATAGRAM_SIZE: usize = 65_507;
@@ -27,7 +37,7 @@ fn get_broker() -> Result<SocketAddr> {
             .send_dgram("SearchingBroker", &remote_addr)
             .and_then(|(socket, _)| socket.recv_dgram(vec![0u8; MAX_DATAGRAM_SIZE]))
             .deadline(Instant::now() + Duration::from_secs(2))
-            .map_err(|e| Error::new(ErrorKind::TimedOut, "No answer in this net"));
+            .map_err(|_e| Error::new(ErrorKind::TimedOut, "No answer in this net"));
         // execute task
         let mut runtime = Runtime::new().unwrap();
         let result = runtime.block_on(request_broker_ip);
@@ -39,13 +49,7 @@ fn get_broker() -> Result<SocketAddr> {
     Err(Error::new(ErrorKind::NotFound, "Unable to find broker"))
 }
 
-fn main() {
-    let broker = get_broker();
-    match broker {
-        Ok(broker) => println!("found broker: {}", broker),
-        Err(e) => println!("{}", e),
-    }
-
+fn run2() {
     // let mut args = env::args().skip(1).collect::<Vec<_>>();
     // let tcp = match args.iter().position(|a| a == "--udp") {
     //     Some(i) => {

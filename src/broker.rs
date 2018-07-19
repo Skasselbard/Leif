@@ -1,22 +1,37 @@
-use broadcast_listener::UdpBroadcastListener;
+use bytes::{Buf, BufMut, Bytes, BytesMut, IntoBuf};
 use futures;
+use message_streams::{TcpMessageStream, UdpMessageStream};
 use std;
 use std::collections::HashMap;
-use std::io::{BufReader, Result};
+use std::io::BufReader;
 use std::iter;
 use std::sync::{Arc, Mutex};
 use tokio;
 use tokio::io;
-use tokio::net::TcpListener;
+use tokio::net::{TcpListener, UdpSocket};
 use tokio::prelude::*;
 
-fn main() {
+fn udp_task(name: String) -> impl Future<Item = (), Error = ()> {
+    let listening_addr = "[::]:8207".parse().unwrap();
+    let sending_addr = "[::]:8208".parse().unwrap();
+    let mut sending_socket = UdpSocket::bind(&sending_addr).unwrap();
+    let incoming = UdpMessageStream::new(UdpSocket::bind(&listening_addr).unwrap());
+    let name = Bytes::from(name);
+    incoming
+        .for_each(move |(message, remote)| {
+            println!("Received datagram:\n{}", String::from_utf8_lossy(&message));
+            sending_socket.connect(&remote)?;
+            sending_socket.poll_send(&name)?;
+            Ok(())
+        })
+        .then(|_| Ok(()))
+}
+
+fn run() {
     let broker_name = String::from("broker");
-    let broadcast_listener = UdpBroadcastListener::bind(broker_name).unwrap();
-    let handle_broadcasts = broadcast_listener.incoming().for_each(move |_| Ok(()));
     tokio::run(
         brokering_task()
-            .select(handle_broadcasts.then(|_| Ok(())))
+            .select(udp_task(broker_name).then(|_| Ok(())))
             .then(|_| Ok(())),
     );
 }
