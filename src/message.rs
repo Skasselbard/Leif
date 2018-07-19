@@ -96,6 +96,6 @@ impl Message {
 
 impl Body {
     pub fn new() -> Self {
-        Body { data: json!(null) }
+        Body { data: json!(15) }
     }
 }

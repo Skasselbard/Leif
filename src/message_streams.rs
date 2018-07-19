@@ -1,7 +1,6 @@
 use bytes::{Buf, BufMut, Bytes, BytesMut, IntoBuf};
 use std::io::{Error, Result};
 use std::net::SocketAddr;
-use tokio::io;
 use tokio::net::TcpStream;
 use tokio::net::UdpSocket;
 use tokio::prelude::{Async, Poll, Stream};

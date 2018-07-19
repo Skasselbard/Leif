@@ -6,24 +6,22 @@ extern crate log;
 extern crate serde_derive;
 #[macro_use]
 extern crate serde_json;
-//#[macro_use]
-extern crate bincode;
 #[macro_use]
 extern crate futures;
 extern crate bytes;
 extern crate conv;
 extern crate get_if_addrs;
-extern crate mio;
-extern crate ron;
 extern crate serde;
+extern crate serde_cbor;
 extern crate tokio;
 extern crate tokio_codec;
 extern crate tokio_io;
 
-mod broker;
+pub mod broker;
+pub mod node;
+
 mod message;
 mod message_streams;
-mod node;
 mod serialization;
 
 pub use message::Version as MessageVersion;

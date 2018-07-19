@@ -1,4 +1,4 @@
-use bytes::{Buf, BufMut, Bytes, BytesMut, IntoBuf};
+use bytes::Bytes;
 use futures;
 use message_streams::{TcpMessageStream, UdpMessageStream};
 use std;
@@ -10,6 +10,22 @@ use tokio;
 use tokio::io;
 use tokio::net::{TcpListener, UdpSocket};
 use tokio::prelude::*;
+
+pub fn run<F>(task: F)
+where
+    F: Future + Send + 'static,
+{
+    let broker_name = String::from("broker");
+    tokio::run(
+        brokering_task()
+            .select(
+                udp_task(broker_name)
+                    .select(task.then(|_| Ok(())))
+                    .then(|_| Ok(())),
+            )
+            .then(|_| Ok(())),
+    );
+}
 
 fn udp_task(name: String) -> impl Future<Item = (), Error = ()> {
     let listening_addr = "[::]:8207".parse().unwrap();
@@ -25,15 +41,6 @@ fn udp_task(name: String) -> impl Future<Item = (), Error = ()> {
             Ok(())
         })
         .then(|_| Ok(()))
-}
-
-fn run() {
-    let broker_name = String::from("broker");
-    tokio::run(
-        brokering_task()
-            .select(udp_task(broker_name).then(|_| Ok(())))
-            .then(|_| Ok(())),
-    );
 }
 
 fn brokering_task() -> impl Future<Item = (), Error = ()> {
@@ -62,7 +69,54 @@ fn brokering_task() -> impl Future<Item = (), Error = ()> {
             let connections_inner = connections.clone();
             let reader = BufReader::new(reader);
 
-            let socket_reader = socket_reader_task(reader, connections_inner, peer_addr);
+            let socket_reader = {
+                let iter = stream::iter_ok::<_, io::Error>(iter::repeat(()));
+                let ret = iter.fold(reader, move |reader, _| {
+                    // read line
+                    let line = io::read_until(reader, b'\n', Vec::new());
+                    let line = line.and_then(|(reader, read_bytes)| {
+                        if read_bytes.len() == 0 {
+                            Err(io::Error::new(io::ErrorKind::BrokenPipe, "broken pipe"))
+                        } else {
+                            Ok((reader, read_bytes))
+                        }
+                    });
+                    //converting line to utf8
+                    let line =
+                        line.map(|(reader, read_bytes)| (reader, String::from_utf8(read_bytes)));
+                    let connections = connections_inner.clone();
+
+                    line.map(move |(reader, message)| {
+                        println!("{}: {:?}", peer_addr, message);
+                        //lock mutex
+                        let mut conns = connections.lock().unwrap();
+
+                        //Message is utf8
+                        if let Ok(msg) = message {
+                            // get all connections except ours
+                            let iter = conns
+                                .iter_mut()
+                                .filter(|&(&other_connectins, _)| other_connectins != peer_addr)
+                                .map(|(_, transmit_channel)| transmit_channel);
+                            // transmit to all filtered connections
+                            for transmit_channel in iter {
+                                transmit_channel
+                                    .unbounded_send(format!("{}: {}", peer_addr, msg))
+                                    .unwrap();
+                            }
+                        }
+                        // Message is not utf8
+                        else {
+                            let tx = conns.get_mut(&peer_addr).unwrap();
+                            tx.unbounded_send("You didn't send valid UTF-8.".to_string())
+                                .unwrap();
+                        }
+
+                        reader
+                    })
+                });
+                ret.map(|reader| reader)
+            };
 
             let socket_writer = receive_channel.fold(writer, |writer, msg| {
                 let amt = io::write_all(writer, msg.into_bytes());
@@ -83,66 +137,4 @@ fn brokering_task() -> impl Future<Item = (), Error = ()> {
             Ok(())
         });
     srv
-}
-
-fn socket_reader_task(
-    reader: BufReader<tokio::io::ReadHalf<tokio::net::TcpStream>>,
-    connections_inner: std::sync::Arc<
-        std::sync::Mutex<
-            std::collections::HashMap<
-                std::net::SocketAddr,
-                futures::sync::mpsc::UnboundedSender<String>,
-            >,
-        >,
-    >,
-    peer_addr: std::net::SocketAddr,
-) -> impl Future<
-    Item = std::io::BufReader<tokio::io::ReadHalf<tokio::net::TcpStream>>,
-    Error = std::io::Error,
-> {
-    let iter = stream::iter_ok::<_, io::Error>(iter::repeat(()));
-    let ret = iter.fold(reader, move |reader, _| {
-        // read line
-        let line = io::read_until(reader, b'\n', Vec::new());
-        let line = line.and_then(|(reader, read_bytes)| {
-            if read_bytes.len() == 0 {
-                Err(io::Error::new(io::ErrorKind::BrokenPipe, "broken pipe"))
-            } else {
-                Ok((reader, read_bytes))
-            }
-        });
-        //converting line to utf8
-        let line = line.map(|(reader, read_bytes)| (reader, String::from_utf8(read_bytes)));
-        let connections = connections_inner.clone();
-
-        line.map(move |(reader, message)| {
-            println!("{}: {:?}", peer_addr, message);
-            //lock mutex
-            let mut conns = connections.lock().unwrap();
-
-            //Message is utf8
-            if let Ok(msg) = message {
-                // get all connections except ours
-                let iter = conns
-                    .iter_mut()
-                    .filter(|&(&other_connectins, _)| other_connectins != peer_addr)
-                    .map(|(_, transmit_channel)| transmit_channel);
-                // transmit to all filtered connections
-                for transmit_channel in iter {
-                    transmit_channel
-                        .unbounded_send(format!("{}: {}", peer_addr, msg))
-                        .unwrap();
-                }
-            }
-            // Message is not utf8
-            else {
-                let tx = conns.get_mut(&peer_addr).unwrap();
-                tx.unbounded_send("You didn't send valid UTF-8.".to_string())
-                    .unwrap();
-            }
-
-            reader
-        })
-    });
-    ret.map(|reader| reader)
 }

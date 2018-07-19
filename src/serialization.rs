@@ -1,14 +1,12 @@
-use bincode;
-use ron;
 use serde::{de::Deserialize, ser::Serialize};
+use serde_cbor;
 use serde_json;
 use std::io::{Error, ErrorKind, Result};
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub enum Serializer {
     Json,
-    Bincode,
-    Ron,
+    Cbor,
 }
 
 pub fn serialize<S>(data: &S, serializer: &Serializer) -> Result<Vec<u8>>
@@ -17,13 +15,9 @@ where
 {
     let vec = match serializer {
         Serializer::Json => serde_json::to_vec(data)?,
-        Serializer::Bincode => match bincode::serialize(data) {
-            Ok(vector) => vector,
-            Err(bincode_error) => Err(Error::new(ErrorKind::Other, bincode_error))?,
-        },
-        Serializer::Ron => match ron::ser::to_string(data) {
+        Serializer::Cbor => match serde_cbor::to_vec(data) {
             Ok(string) => Vec::from(string),
-            Err(ron_error) => Err(Error::new(ErrorKind::Other, ron_error))?,
+            Err(cbor_error) => Err(Error::new(ErrorKind::Other, cbor_error))?,
         },
     };
     Ok(vec)
@@ -35,13 +29,9 @@ where
 {
     let result: D = match serializer {
         Serializer::Json => serde_json::from_slice(buffer)?,
-        Serializer::Bincode => match bincode::deserialize(buffer) {
+        Serializer::Cbor => match serde_cbor::from_slice(buffer) {
             Ok(d) => d,
-            Err(bincode_error) => Err(Error::new(ErrorKind::Other, bincode_error))?,
-        },
-        Serializer::Ron => match ron::de::from_bytes(buffer) {
-            Ok(d) => d,
-            Err(ron_error) => Err(Error::new(ErrorKind::Other, ron_error))?,
+            Err(cbor_error) => Err(Error::new(ErrorKind::Other, cbor_error))?,
         },
     };
     Ok(result)

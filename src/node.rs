@@ -3,20 +3,24 @@ use get_broadcasts;
 use std::io::{self, Error, ErrorKind, Read, Result};
 use std::net::SocketAddr;
 use std::time::{Duration, Instant};
+use tokio;
 use tokio::net::UdpSocket;
 use tokio::prelude::*;
 use tokio::runtime::Runtime;
 
-struct Node {
+pub struct Node {
     //task: Future<Item = T>,
 }
 
 impl Node {
-    pub fn run(&self) {
+    pub fn run<F>(&self, task: F)
+    where
+        F: Future + Send + 'static,
+    {
         let broker = get_broker();
         if let Ok(broker) = broker {
             println!("found broker: {}", broker);
-            //tokio::run(self.task);
+            tokio::run(task.then(|_| Ok(())));
         }
         error!("Cannot find broker");
     }
