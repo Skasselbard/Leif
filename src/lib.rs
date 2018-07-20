@@ -25,7 +25,7 @@ mod message_streams;
 mod serialization;
 
 pub use message::Version as MessageVersion;
-pub use message::{Body, Header, Message};
+pub use message::{Body, Header, Message, MessageType};
 pub use serialization::Serializer;
 
 use get_if_addrs::IfAddr;

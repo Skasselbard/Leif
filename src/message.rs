@@ -1,17 +1,46 @@
 use bytes::{Buf, BufMut, Bytes, BytesMut, IntoBuf};
 use serde_json;
 use serialization::{deserialize, serialize, Serializer};
-use std::io::{Error, ErrorKind, Result};
+use std;
+use std::io::ErrorKind;
 
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum Version {
     V1,
+}
+
+impl Version {
+    fn to_u8(&self) -> u8 {
+        match self {
+            V1 => 1,
+        }
+    }
+
+    fn from_u8(int: &u8) -> std::io::Result<Self> {
+        match int {
+            1 => Ok(Version::V1),
+            _ => Err(std::io::Error::new(
+                ErrorKind::InvalidData,
+                format!("Cannot convert \"{}\" into message version", int),
+            )),
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
+pub enum MessageType {
+    Publish,     // publish data -> these messages are distributed by brokers
+    Subscribe,   // let the broker know what data you want to listen to
+    Unsubscribe, // tell the broker to remove you from a data channel
+    Heartbeat,   // ask the other side for a reaction
+    TokTok,      // answer on a heartbeat
+    Lookup,      // find a kind of node (typically brokers)
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct Header {
-    pub version: Version,
+    pub message_type: MessageType,
     pub body_serializer: Serializer,
     pub channels: serde_json::Value,
 }
@@ -21,6 +50,12 @@ pub struct Body {
     pub data: serde_json::Value,
 }
 
+impl Body {
+    pub fn new() -> Self {
+        Body { data: json!(15) }
+    }
+}
+
 #[derive(Debug, PartialEq)]
 pub struct Message {
     pub header: Header,
@@ -28,74 +63,77 @@ pub struct Message {
 }
 
 impl Message {
-    pub fn serialize(&self, header_serializer: Serializer) -> Result<Bytes> {
-        use conv::*;
-
-        // The Serializer name has to be en/de-coded in json by convention
-        let serializer_name = serde_json::to_vec(&header_serializer)?;
-        let header = serialize(&self.header, &header_serializer)?;
-        let body = serialize(&self.body, &self.header.body_serializer)?;
-        let header_length: u64 = match u64::value_from(header.len()) {
-            Ok(length) => length,
-            Err(e) => Err(Error::new(
-                ErrorKind::InvalidData,
-                format!("Cannot convert usize to u64: {}", e),
-            ))?,
-        };
-        let serializer_length: u16 = match u16::value_from(serializer_name.len()) {
-            Ok(length) => length,
-            Err(e) => Err(Error::new(
-                ErrorKind::InvalidData,
-                format!("Cannot convert usize to u16: {}", e),
-            ))?,
-        };
-        // u16 size | serializer | u64 size | header | body
-        let mut buf =
-            BytesMut::with_capacity(2 + serializer_name.len() + 8 + header.len() + body.len());
-        buf.put_u16_be(serializer_length);
-        buf.put(serializer_name);
-        buf.put_u64_be(header_length);
-        buf.put(header);
-        buf.put(body);
-        Ok(Bytes::from(buf))
+    pub fn serialize(
+        &self,
+        header_serializer: &Serializer,
+        version: Version,
+    ) -> std::io::Result<Bytes> {
+        match version {
+            Version::V1 => serialize_v1(self, header_serializer),
+        }
     }
 
-    pub fn deserialize_header(message: Bytes) -> Result<(Header, Bytes)> {
-        let mut buffer = message.into_buf();
-        trace!("Initial buffer: {:?}", buffer);
+    pub fn deserialize_header(message: &Bytes) -> std::io::Result<(Version, Header, Bytes)> {
+        let (version_byte, rest) = message.split_at(1);
+        match Version::from_u8(&version_byte.into_buf().get_u8())? {
+            Version::V1 => {
+                let (header, bytes) = deserialize_header_v1(&Bytes::from(rest))?;
+                Ok((Version::V1, header, bytes))
+            }
+        }
+    }
 
-        // get the serializer which was used for the header
-        let serializer_length = buffer.get_u16_be() as usize;
-        trace!("Serializer length: {:?}", serializer_length);
-        let (serializer_buffer, mut buffer) = {
-            let mut serializer_buffer: Bytes = buffer.collect();
-            let buffer = serializer_buffer.split_off(serializer_length);
-            (
-                Bytes::from(serializer_buffer).into_buf(),
-                Bytes::from(buffer).into_buf(),
-            )
-        };
+    pub fn deserialize_body(
+        version: Version,
+        body: &Bytes,
+        serializer: &Serializer,
+    ) -> std::io::Result<Body> {
+        match version {
+            Version::V1 => deserialize_body_v1(body, serializer),
+        }
+    }
 
-        // The Serializer name has to be en/de-coded in json by convention
-        let serializer: Serializer = deserialize(serializer_buffer.bytes(), &Serializer::Json)?;
-
-        // Deserialize the header
-        let header_length = buffer.get_u64_be() as usize;
-        let (header_buffer, buffer) = {
-            let mut header_buffer: Vec<u8> = buffer.collect();
-            let buffer = header_buffer.split_off(header_length);
-            (
-                Bytes::from(header_buffer).into_buf(),
-                Bytes::from(buffer).into_buf(),
-            )
-        };
-        let header: Header = deserialize(header_buffer.bytes(), &serializer)?;
-        Ok((header, buffer.collect::<Bytes>()))
+    pub fn deserialize(message: &Bytes) -> std::io::Result<Message> {
+        let (version, header, body) = Message::deserialize_header(message)?;
+        let body = Message::deserialize_body(version, &body, &header.body_serializer)?;
+        Ok(Message { header, body })
     }
 }
+fn serialize_v1(message: &Message, header_serializer: &Serializer) -> std::io::Result<Bytes> {
+    // The Serializer name has to be en/de-coded in json by convention
+    let serializer_name = serde_json::to_vec(header_serializer)?;
+    let header = serialize(&message.header, header_serializer)?;
+    let body = serialize(&message.body, &message.header.body_serializer)?;
+    let header_length: u64 = header.len() as u64;
+    let serializer_length: u16 = serializer_name.len() as u16;
+    // u8 size | u16 size | serializer | u64 size | header | body
+    let mut buf =
+        BytesMut::with_capacity(1 + 2 + serializer_name.len() + 8 + header.len() + body.len());
+    buf.put_u8(Version::V1.to_u8());
+    buf.put_u16_be(serializer_length);
+    buf.put(serializer_name);
+    buf.put_u64_be(header_length);
+    buf.put(header);
+    buf.put(body);
+    Ok(Bytes::from(buf))
+}
 
-impl Body {
-    pub fn new() -> Self {
-        Body { data: json!(15) }
-    }
+fn deserialize_header_v1(message: &Bytes) -> std::io::Result<(Header, Bytes)> {
+    // Two bytes for u16
+    let (length_slice, rest) = message.split_at(2);
+    let serializer_length = length_slice.into_buf().get_u16_be() as usize;
+    let (serializer_slice, rest) = rest.split_at(serializer_length);
+    // The Serializer name has to be en/de-coded in json by convention
+    let serializer: Serializer = deserialize(serializer_slice, &Serializer::Json)?;
+    // Eight bytes for u64
+    let (header_length_slice, rest) = rest.split_at(8);
+    let header_length = header_length_slice.into_buf().get_u64_be() as usize;
+    let (header_slice, rest) = rest.split_at(header_length);
+    let header: Header = deserialize(header_slice, &serializer)?;
+    Ok((header, Bytes::from(rest)))
+}
+
+fn deserialize_body_v1(body: &Bytes, serializer: &Serializer) -> std::io::Result<Body> {
+    let body: Body = deserialize(body, &serializer)?;
+    Ok(body)
 }

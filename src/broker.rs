@@ -5,26 +5,42 @@ use std;
 use std::collections::HashMap;
 use std::io::BufReader;
 use std::iter;
+use std::net::IpAddr;
 use std::sync::{Arc, Mutex};
 use tokio;
 use tokio::io;
+use tokio::net::TcpStream;
 use tokio::net::{TcpListener, UdpSocket};
 use tokio::prelude::*;
 
-pub fn run<F>(task: F)
-where
-    F: Future + Send + 'static,
-{
-    let broker_name = String::from("broker");
-    tokio::run(
-        brokering_task()
-            .select(
-                udp_task(broker_name)
-                    .select(task.then(|_| Ok(())))
-                    .then(|_| Ok(())),
-            )
-            .then(|_| Ok(())),
-    );
+pub struct Broker {
+    tcp_connections: Vec<TcpStream>,
+    udp_connections: Vec<IpAddr>,
+}
+
+impl Broker {
+    pub fn new() -> Self {
+        Broker {
+            tcp_connections: Vec::new(),
+            udp_connections: Vec::new(),
+        }
+    }
+
+    pub fn run<F>(&self, task: F)
+    where
+        F: Future + Send + 'static,
+    {
+        let broker_name = String::from("broker");
+        tokio::run(
+            brokering_task()
+                .select(
+                    udp_task(broker_name)
+                        .select(task.then(|_| Ok(())))
+                        .then(|_| Ok(())),
+                )
+                .then(|_| Ok(())),
+        );
+    }
 }
 
 fn udp_task(name: String) -> impl Future<Item = (), Error = ()> {
