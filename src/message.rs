@@ -5,26 +5,14 @@ use std;
 use std::io::ErrorKind;
 
 #[derive(Debug, PartialEq, Eq)]
-pub enum Version {
+pub enum MessageVersion {
     V1,
 }
 
-impl Version {
-    fn to_u8(&self) -> u8 {
-        match self {
-            V1 => 1,
-        }
-    }
-
-    fn from_u8(int: &u8) -> std::io::Result<Self> {
-        match int {
-            1 => Ok(Version::V1),
-            _ => Err(std::io::Error::new(
-                ErrorKind::InvalidData,
-                format!("Cannot convert \"{}\" into message version", int),
-            )),
-        }
-    }
+#[derive(Debug, PartialEq)]
+pub struct Message {
+    pub header: Header,
+    pub body: Body,
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
@@ -56,40 +44,52 @@ impl Body {
     }
 }
 
-#[derive(Debug, PartialEq)]
-pub struct Message {
-    pub header: Header,
-    pub body: Body,
+impl MessageVersion {
+    fn to_u8(&self) -> u8 {
+        match self {
+            V1 => 1,
+        }
+    }
+
+    fn from_u8(int: &u8) -> std::io::Result<Self> {
+        match int {
+            1 => Ok(MessageVersion::V1),
+            _ => Err(std::io::Error::new(
+                ErrorKind::InvalidData,
+                format!("Cannot convert \"{}\" into message version", int),
+            )),
+        }
+    }
 }
 
 impl Message {
     pub fn serialize(
         &self,
         header_serializer: &Serializer,
-        version: Version,
+        version: MessageVersion,
     ) -> std::io::Result<Bytes> {
         match version {
-            Version::V1 => serialize_v1(self, header_serializer),
+            MessageVersion::V1 => serialize_v1(self, header_serializer),
         }
     }
 
-    pub fn deserialize_header(message: &Bytes) -> std::io::Result<(Version, Header, Bytes)> {
+    pub fn deserialize_header(message: &Bytes) -> std::io::Result<(MessageVersion, Header, Bytes)> {
         let (version_byte, rest) = message.split_at(1);
-        match Version::from_u8(&version_byte.into_buf().get_u8())? {
-            Version::V1 => {
+        match MessageVersion::from_u8(&version_byte.into_buf().get_u8())? {
+            MessageVersion::V1 => {
                 let (header, bytes) = deserialize_header_v1(&Bytes::from(rest))?;
-                Ok((Version::V1, header, bytes))
+                Ok((MessageVersion::V1, header, bytes))
             }
         }
     }
 
     pub fn deserialize_body(
-        version: Version,
+        version: MessageVersion,
         body: &Bytes,
         serializer: &Serializer,
     ) -> std::io::Result<Body> {
         match version {
-            Version::V1 => deserialize_body_v1(body, serializer),
+            MessageVersion::V1 => deserialize_body_v1(body, serializer),
         }
     }
 
@@ -109,12 +109,13 @@ fn serialize_v1(message: &Message, header_serializer: &Serializer) -> std::io::R
     // u8 size | u16 size | serializer | u64 size | header | body
     let mut buf =
         BytesMut::with_capacity(1 + 2 + serializer_name.len() + 8 + header.len() + body.len());
-    buf.put_u8(Version::V1.to_u8());
+    buf.put_u8(MessageVersion::V1.to_u8());
     buf.put_u16_be(serializer_length);
     buf.put(serializer_name);
     buf.put_u64_be(header_length);
     buf.put(header);
     buf.put(body);
+    trace!("Serialized message length: {}", buf.len());
     Ok(Bytes::from(buf))
 }
 

@@ -17,15 +17,14 @@ extern crate tokio;
 extern crate tokio_codec;
 extern crate tokio_io;
 
-pub mod broker;
-pub mod node;
+mod nodes;
 
 mod message;
 mod message_streams;
 mod serialization;
 
-pub use message::Version as MessageVersion;
-pub use message::{Body, Header, Message, MessageType};
+pub use message::{Body, Header, Message, MessageType, MessageVersion};
+pub use nodes::broker::Broker;
 pub use serialization::Serializer;
 
 use get_if_addrs::IfAddr;

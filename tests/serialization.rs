@@ -3,18 +3,48 @@ extern crate serde_json;
 extern crate futures;
 extern crate leif;
 extern crate log;
-extern crate simple_logger;
+extern crate log4rs;
 extern crate tokio;
 
 use futures::future::empty;
-use leif::broker::Broker;
 use leif::node;
 use leif::*;
 use std::time::{Duration, Instant};
 use tokio::prelude::FutureExt;
 
+use log::LevelFilter;
+use log4rs::append::console::ConsoleAppender;
+use log4rs::append::file::FileAppender;
+use log4rs::config::{Appender, Config, Logger, Root};
+use log4rs::encode::pattern::PatternEncoder;
+
+fn log() {
+    let stdout = ConsoleAppender::builder().build();
+
+    let requests = FileAppender::builder()
+        .encoder(Box::new(PatternEncoder::new("{d} - {m}{n}")))
+        .build("log/requests.log")
+        .unwrap();
+
+    let config = Config::builder()
+        .appender(Appender::builder().build("stdout", Box::new(stdout)))
+        .appender(Appender::builder().build("requests", Box::new(requests)))
+        .logger(Logger::builder().build("app::backend::db", LevelFilter::Trace))
+        .logger(
+            Logger::builder()
+                .appender("requests")
+                .additive(false)
+                .build("app::requests", LevelFilter::Trace),
+        )
+        .build(Root::builder().appender("stdout").build(LevelFilter::Trace))
+        .unwrap();
+
+    let handle = log4rs::init_config(config).unwrap();
+
+    // use handle to change logger configuration at runtime
+}
+
 fn serialize_deserialize(serializer: &Serializer) {
-    //simple_logger::init_with_level(log::Level::Trace).unwrap();
     let original = Message {
         header: Header {
             message_type: MessageType::Heartbeat,
@@ -31,6 +61,7 @@ fn serialize_deserialize(serializer: &Serializer) {
 
 #[test]
 fn serialize_deserialize_json() {
+    //log();
     serialize_deserialize(&Serializer::Json);
 }
 
