@@ -24,12 +24,16 @@ mod message_streams;
 mod serialization;
 
 pub use message::{Body, Header, Message, MessageType, MessageVersion};
-pub use nodes::broker::Broker;
+pub use nodes::{broker::Broker, node::Node, producer::Producer};
 pub use serialization::Serializer;
 
 use get_if_addrs::IfAddr;
 use std::io::Result;
 use std::net::IpAddr;
+
+pub trait Parent<C> {
+    fn get_parent<'a>(&'a mut self) -> &mut C;
+}
 
 pub fn get_ip_addresses() -> Result<Vec<IpAddr>> {
     let mut ret = Vec::new();

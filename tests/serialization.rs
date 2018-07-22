@@ -7,7 +7,8 @@ extern crate log4rs;
 extern crate tokio;
 
 use futures::future::empty;
-use leif::node;
+use leif::Broker;
+use leif::Producer;
 use leif::*;
 use std::time::{Duration, Instant};
 use tokio::prelude::FutureExt;
@@ -71,15 +72,15 @@ fn serialize_deserialize_cbor() {
 }
 
 #[test]
-fn run_server() {
-    let broker = Broker::new();
+fn run_broker() {
+    let broker = Broker::new(String::from("broker")).unwrap();
     let task = empty::<(), ()>().deadline(Instant::now() + Duration::from_secs(5));
     broker.run(task);
 }
 
 #[test]
 fn run_node() {
-    let node = node::Node {};
+    let node = Producer::new().unwrap();
     let task = empty::<(), ()>().deadline(Instant::now() + Duration::from_secs(5));
     node.run(task);
 }
