@@ -1,25 +1,43 @@
 use bytes::{BufMut, Bytes, BytesMut};
-use futures;
 use message::{Body, Header, Message, MessageType, MessageVersion};
-use nodes::node::Node;
+use nodes::node::UdpNode;
 use serialization::Serializer;
 use std;
 use std::net::SocketAddr;
 use tokio::net::TcpStream;
-use tokio::net::UdpSocket;
 use tokio::prelude::*;
 use Parent;
 
 pub struct Broker {
     name: String,
-    inner: Node,
+    inner: UdpNode,
     tcp_connections: Vec<TcpStream>,
     udp_connections: Vec<SocketAddr>,
 }
 
-impl Parent<Node> for Broker {
-    fn get_parent(&mut self) -> &mut Node {
+impl Parent<UdpNode> for Broker {
+    fn get_parent(&mut self) -> &mut UdpNode {
         &mut self.inner
+    }
+}
+
+impl Future for Broker {
+    type Item = ();
+    type Error = std::io::Error;
+
+    fn poll(&mut self) -> Poll<(), std::io::Error> {
+        let mut stream = UdpNode::udp_stream(self.inner.udp_listening_socket());
+        loop {
+            let message = match stream.poll() {
+                Ok(Async::Ready(t)) => t,
+                //TODO: why is the task not rescheduled when returning Ok(Async::NotReady)
+                Ok(Async::NotReady) => None,
+                Err(e) => return Err(e),
+            };
+            if let Some((bytes, address)) = message {
+                self.react_to_udp(&bytes, address)?;
+            }
+        }
     }
 }
 
@@ -27,17 +45,17 @@ impl Broker {
     pub fn new(name: String) -> std::io::Result<Self> {
         Ok(Self {
             name,
-            inner: Node::new()?.set_udp_socket("[::]:8207".parse().unwrap())?,
+            inner: UdpNode::new()?.set_udp_socket("[::]:8207".parse().unwrap()),
             tcp_connections: Vec::new(),
             udp_connections: Vec::new(),
         })
     }
 
-    pub fn run<F>(&'static mut self, task: F) -> std::io::Result<()>
-    where
-        F: Future + Send + 'static,
-    {
-        Node::run(self, task, Self::react_to_udp)
+    pub fn start(&mut self) {
+        info!(
+            "listening on port {}",
+            self.inner.udp_listening_socket().port()
+        );
     }
 
     fn react_to_udp(&mut self, message: &Bytes, remote: SocketAddr) -> std::io::Result<()> {

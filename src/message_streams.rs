@@ -23,9 +23,10 @@ impl Stream for UdpMessageStream {
     type Error = Error;
 
     fn poll(&mut self) -> Poll<Option<Self::Item>, Error> {
-        let mut buffer = Vec::with_capacity(MAX_DATAGRAM_SIZE);
-        let (size, remote) = try_ready!(self.socket.poll_recv_from(buffer.as_mut_slice()));
-        Ok(Async::Ready(Some((Bytes::from(buffer), remote))))
+        let mut buffer = [0; MAX_DATAGRAM_SIZE];
+        let (size, remote) = try_ready!(self.socket.poll_recv_from(&mut buffer));
+        let (relevant, _) = buffer.split_at(size);
+        Ok(Async::Ready(Some((Bytes::from(relevant), remote))))
     }
 }
 

@@ -74,12 +74,19 @@ impl Message {
     }
 
     pub fn deserialize_header(message: &Bytes) -> std::io::Result<(MessageVersion, Header, Bytes)> {
-        let (version_byte, rest) = message.split_at(1);
-        match MessageVersion::from_u8(&version_byte.into_buf().get_u8())? {
-            MessageVersion::V1 => {
-                let (header, bytes) = deserialize_header_v1(&Bytes::from(rest))?;
-                Ok((MessageVersion::V1, header, bytes))
+        if message.len() >= 1 {
+            let (version_byte, rest) = message.split_at(1);
+            match MessageVersion::from_u8(&version_byte.into_buf().get_u8())? {
+                MessageVersion::V1 => {
+                    let (header, bytes) = deserialize_header_v1(&Bytes::from(rest))?;
+                    Ok((MessageVersion::V1, header, bytes))
+                }
             }
+        } else {
+            Err(std::io::Error::new(
+                ErrorKind::UnexpectedEof,
+                "Received empty datagram",
+            ))
         }
     }
 
