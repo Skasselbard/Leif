@@ -5,13 +5,17 @@ use std::net::SocketAddr;
 use tokio::net::UdpSocket;
 use tokio::prelude::*;
 
-const MAX_DATAGRAM_SIZE: usize = 65_507;
-
+/**
+ * Some Documentation
+ */
 pub struct UdpNode {
     udp_sending_socket: UdpSocket,
     udp_listening_socket: SocketAddr,
 }
 
+/**
+ * Some Documentation
+ */
 impl UdpNode {
     pub fn new() -> Result<Self> {
         let listening_addr = "[::]:0".parse().unwrap();

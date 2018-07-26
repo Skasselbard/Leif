@@ -3,6 +3,7 @@ use serde_json;
 use serialization::{deserialize, serialize, Serializer};
 use std;
 use std::io::ErrorKind;
+use std::net::SocketAddr;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum MessageVersion {
@@ -104,6 +105,74 @@ impl Message {
         let (version, header, body) = Message::deserialize_header(message)?;
         let body = Message::deserialize_body(version, &body, &header.body_serializer)?;
         Ok(Message { header, body })
+    }
+
+    pub fn new_lookup(own_address: SocketAddr) -> Self {
+        Message {
+            header: Header {
+                message_type: MessageType::Lookup,
+                body_serializer: Serializer::Json,
+                channels: json!(null),
+            },
+            body: Body {
+                data: json!(own_address.port()),
+            },
+        }
+    }
+
+    pub fn new_heartbeat() -> Self {
+        Message {
+            header: Header {
+                message_type: MessageType::Heartbeat,
+                body_serializer: Serializer::Json,
+                channels: json!(null),
+            },
+            body: Body { data: json!(null) },
+        }
+    }
+
+    pub fn new_toktok() -> Self {
+        Message {
+            header: Header {
+                message_type: MessageType::TokTok,
+                body_serializer: Serializer::Json,
+                channels: json!(null),
+            },
+            body: Body { data: json!(null) },
+        }
+    }
+
+    pub fn new_publish(channel: serde_json::Value, body: serde_json::Value) -> Self {
+        Message {
+            header: Header {
+                message_type: MessageType::Publish,
+                body_serializer: Serializer::Json,
+                channels: channel,
+            },
+            body: Body { data: body },
+        }
+    }
+
+    pub fn new_subscribe(channel: serde_json::Value) -> Self {
+        Message {
+            header: Header {
+                message_type: MessageType::Subscribe,
+                body_serializer: Serializer::Json,
+                channels: channel,
+            },
+            body: Body { data: json!(null) },
+        }
+    }
+
+    pub fn new_un_subscribe(channel: serde_json::Value) -> Self {
+        Message {
+            header: Header {
+                message_type: MessageType::Unsubscribe,
+                body_serializer: Serializer::Json,
+                channels: channel,
+            },
+            body: Body { data: json!(null) },
+        }
     }
 }
 fn serialize_v1(message: &Message, header_serializer: &Serializer) -> std::io::Result<Bytes> {
