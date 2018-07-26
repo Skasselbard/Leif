@@ -24,7 +24,7 @@ mod message_streams;
 mod serialization;
 
 pub use message::{Body, Header, Message, MessageType, MessageVersion};
-pub use nodes::{broker::Broker, consumer, node::UdpNode}; //, producer::Producer};
+pub use nodes::{broker::Broker, client::Client, node::UdpNode}; //, producer::Producer};
 pub use serialization::Serializer;
 
 use get_if_addrs::IfAddr;

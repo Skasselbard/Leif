@@ -1,8 +1,7 @@
 pub mod broker;
-pub mod consumer;
+pub mod client;
 pub mod node;
-pub mod producer;
 
-use super::message;
-use super::message_streams;
-use super::serialization;
+// use super::message;
+// use super::message_streams;
+// use super::serialization;
