@@ -107,7 +107,7 @@ impl Message {
         Ok(Message { header, body })
     }
 
-    pub fn new_lookup(own_address: SocketAddr) -> Self {
+    pub fn new_lookup(own_port: u16) -> Self {
         Message {
             header: Header {
                 message_type: MessageType::Lookup,
@@ -115,7 +115,7 @@ impl Message {
                 channels: json!(null),
             },
             body: Body {
-                data: json!(own_address.port()),
+                data: json!(own_port),
             },
         }
     }

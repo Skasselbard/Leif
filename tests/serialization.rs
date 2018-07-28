@@ -63,7 +63,7 @@ fn serialize_deserialize(serializer: &Serializer) {
 
 #[test]
 fn serialize_deserialize_json() {
-    //log();
+    log();
     serialize_deserialize(&Serializer::Json);
 }
 
@@ -74,16 +74,17 @@ fn serialize_deserialize_cbor() {
 
 #[test]
 fn run_broker() {
+    log();
     let mut broker = Broker::new(String::from("broker")).unwrap();
-    broker.start();
     let task = empty::<(), ()>(); //.deadline(Instant::now() + Duration::from_secs(5));
     tokio::run(broker.select(task.then(|_| Ok(()))).then(|_| Ok(())));
 }
 
 #[test]
 fn run_node() {
-    use leif;
-    leif::consumer::main();
+    let mut client = Client::new().unwrap();
+    let task = empty::<(), ()>(); //.deadline(Instant::now() + Duration::from_secs(5));
+    tokio::run(client.select(task.then(|_| Ok(()))).then(|_| Ok(())));
 }
 
 // #[test]

@@ -26,7 +26,7 @@ impl Future for Broker {
     type Error = std::io::Error;
 
     fn poll(&mut self) -> Poll<(), std::io::Error> {
-        let mut stream = UdpNode::udp_stream(self.inner.udp_listening_socket());
+        let mut stream = self.inner.udp_stream();
         loop {
             let message = match stream.poll() {
                 Ok(Async::Ready(t)) => t,
@@ -43,19 +43,14 @@ impl Future for Broker {
 
 impl Broker {
     pub fn new(name: String) -> std::io::Result<Self> {
+        let mut listening_port = Vec::with_capacity(1);
+        listening_port.push(8207);
         Ok(Self {
             name,
-            inner: UdpNode::new()?.set_udp_socket("[::]:8207".parse().unwrap()),
+            inner: UdpNode::new()?.set_listening_port_candidates(listening_port),
             tcp_connections: Vec::new(),
             udp_connections: Vec::new(),
         })
-    }
-
-    pub fn start(&mut self) {
-        info!(
-            "listening on port {}",
-            self.inner.udp_listening_socket().port()
-        );
     }
 
     fn react_to_udp(&mut self, message: &Bytes, remote: SocketAddr) -> std::io::Result<()> {
@@ -66,7 +61,7 @@ impl Broker {
                 MessageType::Unsubscribe => self.handle_unsubscribe(&header),
                 MessageType::Heartbeat => self.handle_heartbeat(remote),
                 MessageType::TokTok => self.handle_toktok(),
-                MessageType::Lookup => self.handle_lookup(remote),
+                MessageType::Lookup => self.handle_lookup(&message, remote),
             },
             Err(e) => {
                 warn!("Unable to deserialize header: {}", e);
@@ -98,22 +93,23 @@ impl Broker {
         Ok(())
     }
 
-    fn handle_lookup(&mut self, remote: SocketAddr) -> std::io::Result<()> {
+    fn handle_lookup(&mut self, message: &Bytes, remote: SocketAddr) -> std::io::Result<()> {
         debug!("received lookup");
-        let message = Message {
-            header: Header {
-                message_type: MessageType::Lookup,
-                body_serializer: Serializer::Json,
-                channels: json!(null),
-            },
-            body: Body {
-                data: json!(self.inner.udp_listening_socket().port()),
-            },
-        };
-        let _ = self.inner.send_udp(
-            &message.serialize(&Serializer::Json, MessageVersion::V1)?,
-            &remote,
-        );
+        if let Some(port) = self.inner.get_listening_port() {
+            let message = Message::deserialize(message)?;
+            if message.body.data.is_u64() {
+                if let Some(remote_port) = message.body.data.as_u64() {
+                    let answer = Message::new_lookup(port);
+                    let remote = SocketAddr::new(remote.ip(), remote_port as u16);
+                    let _ = self.inner.send_udp(
+                        &answer.serialize(&Serializer::Json, MessageVersion::V1)?,
+                        &remote,
+                    );
+                }; // integer cast failed
+            }; // wrong message body
+        } else {
+            warn!("Received lookup before listening socket was bound");
+        }
         Ok(())
     }
 }
