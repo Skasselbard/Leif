@@ -79,7 +79,7 @@ impl Client {
     fn broadcast_for_broker(&mut self) -> Result<()> {
         let message = Message::new_lookup(self.inner.udp_listening_socket());
         // 8207 => BROT(cast)
-        let remote_addr = SocketAddr::new("[ff01::1]:0".parse().unwrap(), 8207);
+        let remote_addr = SocketAddr::new("ff01::1".parse().unwrap(), 8207);
         debug!("Broadcast to {}", remote_addr);
         self.inner.send_broadcast(
             &message.serialize(&Serializer::Json, MessageVersion::V1)?,
