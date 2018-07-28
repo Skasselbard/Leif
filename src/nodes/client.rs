@@ -54,7 +54,7 @@ impl Client {
         })
     }
 
-    pub fn start(&'static mut self) {
+    pub fn start(&mut self) {
         self.state = State::Connecting(Instant::now());
         let _ = self.broadcast_for_broker();
     }
