@@ -19,7 +19,7 @@ pub struct UdpNode {
 impl UdpNode {
     pub fn new() -> Result<Self> {
         let listening_addr: SocketAddr = "[::]:0".parse().unwrap();
-        let sending_addr = "[::]:0".parse().unwrap();
+        let sending_addr: SocketAddr = "[::]:0".parse().unwrap();
         debug!("listening port {}", listening_addr.port());
         debug!("sending port {}", sending_addr.port());
         Ok(UdpNode {
@@ -37,7 +37,11 @@ impl UdpNode {
     pub fn send_udp(&mut self, datagram: &Bytes, remote: &SocketAddr) -> Result<()> {
         self.udp_sending_socket.connect(remote)?;
         self.udp_sending_socket.poll_send(datagram)?;
-        debug!("send:\n{}\nto:\n{}", datagram, remote);
+        debug!(
+            "send:\n{}\nto:\n{}",
+            String::from_utf8_lossy(datagram),
+            remote
+        );
         Ok(())
     }
 
