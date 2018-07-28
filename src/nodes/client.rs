@@ -54,10 +54,7 @@ impl Client {
         })
     }
 
-    pub fn start<F>(&'static mut self)
-    where
-        F: Future + Send + 'static,
-    {
+    pub fn start(&'static mut self) {
         self.state = State::Connecting(Instant::now());
         let _ = self.broadcast_for_broker();
     }
