@@ -81,7 +81,6 @@ impl Client {
         // 8207 => BROT(cast)
         let remote_addr = SocketAddr::new("ff01::1".parse().unwrap(), 8207);
         debug!("Broadcast to {}", remote_addr);
-        info!("Send broadcast to {}", remote_addr);
         self.inner.send_broadcast(
             &message.serialize(&Serializer::Json, MessageVersion::V1)?,
             &remote_addr,
