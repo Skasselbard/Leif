@@ -1,10 +1,15 @@
 use bytes::Bytes;
+use futures::future::poll_fn;
+use futures::future::Future;
 use message::{Message, MessageType, MessageVersion};
-use nodes::node::UdpNode;
+use nodes::node::*;
 use serialization::Serializer;
 use std::io::{Error, Result};
 use std::net::SocketAddr;
+use std::sync::Arc;
 use std::time::{Duration, Instant};
+use tokio;
+use tokio::net::UdpSocket;
 use tokio::prelude::*;
 use Parent;
 
@@ -15,14 +20,11 @@ enum State {
 }
 
 pub struct Client {
-    inner: UdpNode,
+    udp_send_socket: UdpSocket,
+    udp_incoming: Box<Stream<Item = (Bytes, SocketAddr), Error = Error> + Send>,
+    udp_listening_port: u16,
     state: State,
-}
-
-impl Parent<UdpNode> for Client {
-    fn get_parent(&mut self) -> &mut UdpNode {
-        &mut self.inner
-    }
+    broadcast_retry_timeout: Duration,
 }
 
 impl Future for Client {
@@ -30,19 +32,15 @@ impl Future for Client {
     type Error = Error;
 
     fn poll(&mut self) -> Poll<(), Error> {
-        let mut stream = self.inner.udp_stream();
-        self.state = State::Connecting(Instant::now());
-        let _ = self.broadcast_for_broker();
+        //let mut stream = self.inner.udp_stream();
+        //self.state = State::Connecting(Instant::now());
         loop {
-            self.check_connection();
-            let message = match stream.poll() {
-                Ok(Async::Ready(t)) => t,
-                //TODO: why is the task not rescheduled when returning Ok(Async::NotReady)
-                Ok(Async::NotReady) => None, //return Ok(Async::NotReady),
-                Err(e) => return Err(e),
-            };
+            let _ = self.connect();
+            let message = try_ready!(self.udp_incoming.poll());
             if let Some((bytes, address)) = message {
                 self.react_to_udp(&bytes, address)?;
+            } else {
+                return Ok(Async::Ready(()));
             }
         }
     }
@@ -50,10 +48,24 @@ impl Future for Client {
 
 impl Client {
     pub fn new() -> Result<Self> {
+        let mut ports = Vec::with_capacity(1);
+        ports.push(8208);
+        let listening_socket = bind_listening_socket(ports);
+        let listening_port = listening_socket.local_addr()?.port();
         Ok(Self {
-            inner: UdpNode::new()?,
+            udp_send_socket: UdpSocket::bind(&"[::]:0"
+                .parse()
+                .expect("Unable to bind sending socket"))?,
+            udp_incoming: Box::new(udp_stream(listening_socket)),
+            udp_listening_port: listening_port,
             state: State::Disconnected,
+            broadcast_retry_timeout: Duration::from_secs(30),
         })
+    }
+
+    pub fn set_broadcast_retry_timeout(mut self, timeout: Duration) -> Self {
+        self.broadcast_retry_timeout = timeout;
+        self
     }
 
     fn react_to_udp(&mut self, message: &Bytes, remote: SocketAddr) -> Poll<(), Error> {
@@ -78,29 +90,46 @@ impl Client {
     }
 
     fn broadcast_for_broker(&mut self) -> Poll<(), Error> {
-        if let Some(port) = self.inner.get_listening_port() {
-            let message = Message::new_lookup(port);
-            // 8207 => BROT(cast)
-            //let remote_addr = SocketAddr::new("ff01::1".parse().unwrap(), 8207);
-            let remote_addr = "255.255.255.255:8207".parse().unwrap();
-            debug!("Broadcast to {}", remote_addr);
-            self.inner.send_broadcast(
-                &message.serialize(&Serializer::Json, MessageVersion::V1)?,
-                &remote_addr,
-            )
-        } else {
-            warn!("Tried to broadcast without a bound listening socket");
-            Ok(Async::Ready(()))
+        let message = Message::new_lookup(self.udp_listening_port);
+        // 8207 => BROT(cast)
+        let remote_addr = "[ff02::1]:8207".parse().unwrap();
+        //let remote_addr = "255.255.255.255:8207".parse().unwrap();
+        debug!("Broadcast to {}", remote_addr);
+        send_broadcast(
+            &mut self.udp_send_socket,
+            &message.serialize(&Serializer::Json, MessageVersion::V1)?,
+            &remote_addr,
+        )
+    }
+
+    fn connect(&mut self) -> Poll<(), Error> {
+        match self.state {
+            State::Connected(_) => return Ok(Async::Ready(())),
+            State::Disconnected => {
+                self.broadcast_for_broker()?;
+                self.state = State::Connecting(Instant::now());
+            }
+            State::Connecting(_) => {}
+        }
+        loop {
+            self.check_broadcast_retry()?;
+            match self.state {
+                State::Connected(_) => return Ok(Async::Ready(())),
+                State::Connecting(_) => {
+                    task::current().notify();
+                    return Ok(Async::NotReady);
+                }
+                State::Disconnected => return Ok(Async::Ready(())),
+            }
         }
     }
 
-    fn check_connection(&mut self) -> Poll<(), Error> {
+    fn check_broadcast_retry(&mut self) -> Poll<(), Error> {
         if let State::Connecting(start_instant) = self.state {
-            let retry_period = 30;
-            if Instant::now().duration_since(start_instant) > Duration::from_secs(retry_period) {
+            if Instant::now().duration_since(start_instant) > self.broadcast_retry_timeout {
                 info!(
                     "No broker found in the last {} seconds -> retry broadcast",
-                    retry_period
+                    self.broadcast_retry_timeout.as_secs()
                 );
                 self.state = State::Connecting(Instant::now());
                 self.broadcast_for_broker()?;
@@ -111,7 +140,8 @@ impl Client {
 
     fn handle_heartbeat(&mut self, remote: SocketAddr) -> Poll<(), Error> {
         debug!("received heartbeat");
-        self.inner.send_udp(
+        send_udp(
+            &mut self.udp_send_socket,
             &Message::new_toktok().serialize(&Serializer::Json, MessageVersion::V1)?,
             &remote,
         )

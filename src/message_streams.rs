@@ -3,7 +3,7 @@ use std::io::{Error, Result};
 use std::net::SocketAddr;
 use tokio::net::TcpStream;
 use tokio::net::UdpSocket;
-use tokio::prelude::{Async, Poll, Stream};
+use tokio::prelude::*;
 use tokio_io::{AsyncRead, AsyncWrite};
 
 const MAX_DATAGRAM_SIZE: usize = 65_507;
@@ -76,6 +76,9 @@ impl Stream for TcpMessageStream {
 
     fn poll(&mut self) -> Result<Async<Option<Self::Item>>> {
         let sock_closed = self.fill_read_buf()?.is_ready();
+        if sock_closed {
+            return Ok(Async::Ready(None));
+        }
         // try to read the length of the message
         if self.read.len() >= 8 {
             let message_length = {
@@ -88,10 +91,7 @@ impl Stream for TcpMessageStream {
                 return Ok(Async::Ready(Some(message)));
             }
         }
-        if sock_closed {
-            Ok(Async::Ready(None))
-        } else {
-            Ok(Async::NotReady)
-        }
+        task::current().notify();
+        return Ok(Async::NotReady);
     }
 }
