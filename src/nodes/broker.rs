@@ -85,8 +85,7 @@ impl Broker {
             &mut self.udp_send_socket,
             &Message::new_toktok().serialize(&Serializer::Json, MessageVersion::V1)?,
             &remote,
-        )?;
-        Ok(Async::Ready(()))
+        )
     }
     fn handle_toktok(&mut self) -> Poll<(), Error> {
         debug!("received toktok");

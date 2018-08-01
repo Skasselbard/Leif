@@ -1,11 +1,17 @@
 use bytes::Bytes;
 use futures::stream::Stream;
 use message_streams::UdpMessageStream;
+use serde_json::Value;
 use std::io::{Error, ErrorKind, Result};
 use std::net::SocketAddr;
-use std::sync::Mutex;
 use tokio::net::UdpSocket;
 use tokio::prelude::*;
+
+pub trait Node {
+    fn publish(&mut self, channel: Value, message: Value) -> Result<()>;
+    fn receive(&mut self) -> Result<(Value, Value)>;
+    fn subscribe(&mut self, channel: Value) -> Result<()>;
+}
 
 pub fn send_udp(
     sending_socket: &mut UdpSocket,

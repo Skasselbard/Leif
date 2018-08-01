@@ -80,12 +80,12 @@ fn run_broker() {
     tokio::run(broker.select(task.then(|_| Ok(()))).then(|_| Ok(())));
 }
 
-#[test]
-fn run_node() {
-    let mut client = Client::new().unwrap();
-    let task = empty::<(), ()>(); //.deadline(Instant::now() + Duration::from_secs(5));
-    tokio::run(client.select(task.then(|_| Ok(()))).then(|_| Ok(())));
-}
+// #[test]
+// fn run_node() {
+//     let mut client = Client::new().unwrap();
+//     let task = empty::<(), ()>(); //.deadline(Instant::now() + Duration::from_secs(5));
+//     tokio::run(client.select(task.then(|_| Ok(()))).then(|_| Ok(())));
+// }
 
 // #[test]
 // fn run_node() {
